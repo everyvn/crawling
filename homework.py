@@ -1,27 +1,53 @@
+from selenium import webdriver
 import requests
 from bs4 import BeautifulSoup
 
-#BeautifulSoup으로 html 데이터 통으로 받아오기
-url = 'https://tiki.vn/search?q='
+# 검색할 쿼리 입력받기
 query = input('찾고싶은 상품을 입력해주세요 : ')
-full_url = url + query
-url_data = requests.get(full_url).text
-bsObj = BeautifulSoup(url_data, 'html.parser')
 
-#받아올 값 만들기 (품명, 가격, 할인율(decompose용), 제품링크)
-prod_title = bsObj.find_all(name="p", class_ = 'title') #티키에 tooltip 중 같은 class를 쓰는 div가 있음.
-prod_sale = bsObj.find_all(class_ = 'final-price')
-prod_rate = bsObj.find_all(class_ = 'sale-tag')
-prod_link = bsObj.find_all(name="a", class_ = 'search-a-product-item')
+# 웹드라이버로 tiki에 접속
+driver = webdriver.Chrome('./chromedriver')
+driver.get('https://tiki.vn/')
+driver.implicitly_wait(10)
 
-#검색 결과 수 확인
-print('검색결과는 총 ', len(prod_title), '개 입니다.')
+# 페이지 전체 로딩
+html = driver.page_source
+soup = BeautifulSoup(html, 'html.parser')
 
-for span in prod_rate:
-    span.decompose()
+# 망할놈의 티키 알림 끄기
+if driver.find_element_by_class_name('popover-button'):
+    driver.find_element_by_class_name('popover-button').click()
 
-for n in range(len(prod_title)):
-    print(n+1,'. ',prod_title[n].text.strip(), prod_sale[n].text.strip())
-    # print('구매링크 : ', prod_link[n].get('href'))
-#tiki의 메인페이지는 51개의 제품이 나열되는데 코드실행시 일부 제품이 광고제품인듯한데 리스트에서빠짐.
-#태그와 클래스는 같은데 왜빠지는지 모르겠음
+# 쿼리로 검색진행
+driver.find_element_by_class_name('FormSearch__Input-hwmlek-2').send_keys(query)
+driver.find_element_by_class_name('FormSearch__Button-hwmlek-3').click()
+
+#for문으로 사용하는 경우 전체 페이지네이션의 길이를 알 수 없음
+i = 1
+while True:
+    
+    # 페이지리스트 생성 (페이지네이션 전체 li를 리스트로 만듦)
+    page_list = driver.find_elements_by_css_selector('.list-pager > ul > li')
+    print(i, " 번째 페이지 입니다.")
+    
+    # 로딩된 페이지 다시 파싱
+    html = driver.page_source
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # 페이지 내용 선택자별로 정리
+    prod_title = driver.find_elements_by_css_selector('p.title')
+    prod_sale = driver.find_elements_by_css_selector('.final-price')
+    prod_rate = driver.find_elements_by_css_selector('span.sale-tag')
+    prod_link = driver.find_elements_by_css_selector('a.search-a-product-item')
+
+    # 페이지 안에 몇개의 검색결과가 있는지 확인
+    print(len(prod_title), ' 개의 검색 결과가 있습니다.')
+
+    # 로딩된 페이지에서 전체 제품명, 가격, 할인율을 뽑아옴
+    for n in range(len(prod_title)):
+        print(prod_title[n].text.strip(), prod_sale[n].text.strip())
+    
+    page_list[-1].click() # 페에지네이션의 가장 마지막 리스트 (">")버튼을 눌러서 페이지 이동
+    if i == 10:
+        break
+    i+=1
